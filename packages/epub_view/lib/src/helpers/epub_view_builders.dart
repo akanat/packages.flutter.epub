@@ -71,7 +71,7 @@ class DefaultBuilderOptions {
   final TextStyle textStyle;
 
   const DefaultBuilderOptions({
-    this.loaderSwitchDuration = const Duration(seconds: 1),
+    this.loaderSwitchDuration = const Duration(seconds: 0),
     this.transitionBuilder = DefaultBuilderOptions._transitionBuilder,
     this.chapterPadding = const EdgeInsets.all(8),
     this.paragraphPadding = const EdgeInsets.symmetric(horizontal: 16),
@@ -81,6 +81,5 @@ class DefaultBuilderOptions {
     ),
   });
 
-  static Widget _transitionBuilder(Widget child, Animation<double> animation) =>
-      FadeTransition(opacity: animation, child: child);
+  static Widget _transitionBuilder(Widget child, Animation<double> animation) => FadeTransition(opacity: animation, child: child);
 }

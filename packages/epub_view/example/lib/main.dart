@@ -29,9 +29,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _setSystemUIOverlayStyle();
   }
 
-  Brightness get platformBrightness =>
-      MediaQueryData.fromView(WidgetsBinding.instance.window)
-          .platformBrightness;
+  Brightness get platformBrightness => MediaQueryData.fromView(WidgetsBinding.instance.window).platformBrightness;
 
   void _setSystemUIOverlayStyle() {
     if (platformBrightness == Brightness.light) {
@@ -82,7 +80,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _epubReaderController = EpubController(
       document:
           // EpubDocument.openAsset('assets/New-Findings-on-Shirdi-Sai-Baba.epub'),
-          EpubDocument.openAsset('assets/New-Findings-on-Shirdi-Sai-Baba.epub'),
+          EpubDocument.openAsset('assets/aqyqat-pen-angyz.epub'),
       // epubCfi:
       //     'epubcfi(/6/26[id4]!/4/2/2[id4]/22)', // book.epub Chapter 3 paragraph 10
       // epubCfi:
@@ -127,21 +125,23 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       );
 
-  void _showCurrentEpubCfi(context) {
-    final cfi = _epubReaderController.generateEpubCfi();
+  void _showCurrentEpubCfi(context) async {
+    List<ParagraphViewport>? items = await _epubReaderController.getContentWithViewport();
+    for (ParagraphViewport item in items ?? []) {
+      debugPrint('item: ${item.itemIndex}, content: ${item.content}, screenCoverage: ${item.screenCoverage}');
 
-    if (cfi != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(cfi),
-          action: SnackBarAction(
-            label: 'GO',
-            onPressed: () {
-              _epubReaderController.gotoEpubCfi(cfi);
-            },
-          ),
-        ),
-      );
+      // I/flutter ( 5263): , screenCoverage: 0.12852373887240356
+      // I/flutter ( 5263): item: 2, content: АБАЙ ҚҰНАНБАЙҰЛЫ, screenCoverage: 0.0791913946587537
+      // I/flutter ( 5263): item: 3, content: (1845–1904), screenCoverage: 0.0791913946587537
+      // I/flutter ( 5263): item: 4, content:
+      // I/flutter ( 5263): Осы жұрт Ескендірді біле ме екен?Македония шаһары – оған мекен.Филипп патша баласы, ер көңілді,Мақтан сүйгіш, қызғаншақ адам екен.
+      // I/flutter ( 5263):
+      // I/flutter ( 5263): 		 Филипп өлді, Ескендір патша болды,Жасы əрең жиырма бірге толды.Өз жұрты аз көрініп, көршілергеКөз алартып қарады оңды-солды.
+      // I/flutter ( 5263):
+      // I/flutter ( 5263): 		 Сұмдықпен ғаскер жиып қаруланды,Жақын жерге жау болды, тұра аттанды.Көп елді күтінбеген қырды, жойды,Ханды өлтіріп, қаласын тартып алды.
+      // I/flutter ( 5263):
+      // I/flutter ( 5263): 		 Жазасыз жақын жердің бəрін шапты,Дарияның суындай қандар ақты. , screenCoverage: 1.1060830860534123
+      // I/flutter ( 5263): item: 5, content: Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін де бодам Шапқан елдің бəрін �
     }
   }
 }

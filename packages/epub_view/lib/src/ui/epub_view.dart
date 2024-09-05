@@ -4,9 +4,11 @@ import 'dart:typed_data';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:epub_view/src/data/epub_cfi_reader.dart';
 import 'package:epub_view/src/data/epub_parser.dart';
+import 'package:epub_view/src/data/models/absolute_view_value.dart';
 import 'package:epub_view/src/data/models/chapter.dart';
 import 'package:epub_view/src/data/models/chapter_view_value.dart';
 import 'package:epub_view/src/data/models/paragraph.dart';
+import 'package:epub_view/src/data/models/paragraph_viewport.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -61,6 +63,9 @@ class _EpubViewState extends State<EpubView> {
   List<Paragraph> _paragraphs = [];
   EpubCfiReader? _epubCfiReader;
   EpubChapterViewValue? _currentValue;
+  AbsoluteViewValue? _currentAbsoluteStartValue;
+  AbsoluteViewValue? _currentAbsoluteCenterValue;
+  AbsoluteViewValue? _currentAbsoluteEndValue;
   final _chapterIndexes = <int>[];
 
   EpubController get _controller => widget.controller;
@@ -101,8 +106,7 @@ class _EpubViewState extends State<EpubView> {
       return true;
     }
     _chapters = parseChapters(_controller._document!);
-    final parseParagraphsResult =
-        parseParagraphs(_chapters, _controller._document!.Content);
+    final parseParagraphsResult = parseParagraphs(_chapters, _controller._document!.Content);
     _paragraphs = parseParagraphsResult.flatParagraphs;
     _chapterIndexes.addAll(parseParagraphsResult.chapterIndexes);
 
@@ -117,9 +121,68 @@ class _EpubViewState extends State<EpubView> {
     return true;
   }
 
+  Future<List<ParagraphViewport>> getContentWithViewport() async {
+    final viewport = List<ParagraphViewport>.empty(growable: true);
+
+    for (var i = 0; i < _paragraphs.length; i++) {
+      _itemScrollController!.jumpTo(index: i);
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      for (var item in _itemPositionListener!.itemPositions.value) {
+        if (item.index == i) {
+          ParagraphViewport itemViewport = ParagraphViewport(
+            itemIndex: i,
+            content: _paragraphs[i].element.text,
+            screenCoverage: item.itemTrailingEdge - item.itemLeadingEdge,
+          );
+          viewport.add(itemViewport);
+          break;
+        }
+      }
+
+      // if (i > 20) break;
+    }
+
+    return viewport;
+  }
+
   void _changeListener() {
-    if (_paragraphs.isEmpty ||
-        _itemPositionListener!.itemPositions.value.isEmpty) {
+    if (_itemPositionListener!.itemPositions.value.isNotEmpty) {
+      // if (absoluteValues.isEmpty) {
+      //   for (var item in _itemPositionListener!.itemPositions.value) {
+      //     debugPrint('item: ${item.index}, leading: ${item.itemLeadingEdge}, trailing: ${item.itemTrailingEdge}');
+      //     absoluteValues.add(AbsoluteViewValue(
+      //       itemIndex: item.index,
+      //       itemLeadingEdge: item.itemLeadingEdge,
+      //       itemTrailingEdge: item.itemTrailingEdge,
+      //     ));
+      //   }
+      // }
+
+      _currentAbsoluteStartValue = AbsoluteViewValue(
+        itemIndex: _itemPositionListener!.itemPositions.value.first.index,
+        itemLeadingEdge: _itemPositionListener!.itemPositions.value.first.itemLeadingEdge,
+        itemTrailingEdge: _itemPositionListener!.itemPositions.value.first.itemTrailingEdge,
+      );
+      for (var item in _itemPositionListener!.itemPositions.value) {
+        if (item.itemLeadingEdge <= 0.5 && item.itemTrailingEdge > 0.5) {
+          _currentAbsoluteCenterValue = AbsoluteViewValue(
+            itemIndex: item.index,
+            itemLeadingEdge: item.itemLeadingEdge,
+            itemTrailingEdge: item.itemTrailingEdge,
+          );
+        }
+        if (item.itemLeadingEdge < 0.97 && item.itemTrailingEdge >= 0.97) {
+          _currentAbsoluteEndValue = AbsoluteViewValue(
+            itemIndex: item.index,
+            itemLeadingEdge: item.itemLeadingEdge,
+            itemTrailingEdge: item.itemTrailingEdge,
+          );
+        }
+      }
+    }
+
+    if (_paragraphs.isEmpty || _itemPositionListener!.itemPositions.value.isEmpty) {
       return;
     }
     final position = _itemPositionListener!.itemPositions.value.first;
@@ -200,18 +263,21 @@ class _EpubViewState extends State<EpubView> {
       return;
     } else {
       final paragraph = _paragraphByIdRef(hrefIdRef);
-      final chapter =
-          paragraph != null ? _chapters[paragraph.chapterIndex] : null;
+      final chapter = paragraph != null ? _chapters[paragraph.chapterIndex] : null;
 
       if (chapter != null && paragraph != null) {
-        final paragraphIndex =
-            _epubCfiReader?.getParagraphIndexByElement(paragraph.element);
+        final paragraphIndex = _epubCfiReader?.getParagraphIndexByElement(paragraph.element);
+
+        debugPrint('paragraphIndex: $paragraphIndex');
+        //TODO find the hrefIdRef in paragraph's content and jump to to it by jumpToAddress
+
         final cfi = _epubCfiReader?.generateCfi(
           book: _controller._document,
           chapter: chapter,
           paragraphIndex: paragraphIndex,
         );
 
+        debugPrint('cfi: $cfi');
         _gotoEpubCfi(cfi);
       }
 
@@ -219,18 +285,15 @@ class _EpubViewState extends State<EpubView> {
     }
   }
 
-  Paragraph? _paragraphByIdRef(String idRef) =>
-      _paragraphs.firstWhereOrNull((paragraph) {
+  Paragraph? _paragraphByIdRef(String idRef) => _paragraphs.firstWhereOrNull((paragraph) {
         if (paragraph.element.id == idRef) {
           return true;
         }
 
-        return paragraph.element.children.isNotEmpty &&
-            paragraph.element.children[0].id == idRef;
+        return paragraph.element.children.isNotEmpty && paragraph.element.children[0].id == idRef;
       });
 
-  EpubChapter? _chapterByFileName(String? fileName) =>
-      _chapters.firstWhereOrNull((chapter) {
+  EpubChapter? _chapterByFileName(String? fileName) => _chapters.firstWhereOrNull((chapter) {
         if (fileName != null) {
           if (chapter.ContentFileName!.contains(fileName)) {
             return true;
@@ -289,10 +352,7 @@ class _EpubViewState extends State<EpubView> {
     double? leadingEdge,
   }) {
     int posIndex = positionIndex;
-    if (trailingEdge != null &&
-        leadingEdge != null &&
-        trailingEdge < _minTrailingEdge &&
-        leadingEdge < _minLeadingEdge) {
+    if (trailingEdge != null && leadingEdge != null && trailingEdge < _minTrailingEdge && leadingEdge < _minLeadingEdge) {
       posIndex += 1;
     }
 
@@ -336,8 +396,7 @@ class _EpubViewState extends State<EpubView> {
 
     return Column(
       children: <Widget>[
-        if (chapterIndex >= 0 && paragraphIndex == 0)
-          builders.chapterDividerBuilder(chapters[chapterIndex]),
+        if (chapterIndex >= 0 && paragraphIndex == 0) builders.chapterDividerBuilder(chapters[chapterIndex]),
         Html(
           data: paragraphs[index].element.outerHtml,
           onLinkTap: (href, _, __) => onExternalLinkPressed(href!),
@@ -355,10 +414,8 @@ class _EpubViewState extends State<EpubView> {
             TagExtension(
               tagsToExtend: {"img"},
               builder: (imageContext) {
-                final url =
-                    imageContext.attributes['src']!.replaceAll('../', '');
-                final content = Uint8List.fromList(
-                    document.Content!.Images![url]!.Content!);
+                final url = imageContext.attributes['src']!.replaceAll('../', '');
+                final content = Uint8List.fromList(document.Content!.Images![url]!.Content!);
                 return Image(
                   image: MemoryImage(content),
                 );
@@ -412,8 +469,7 @@ class _EpubViewState extends State<EpubView> {
             key: const Key('epubx.root.error'),
             child: Padding(
               padding: const EdgeInsets.all(32),
-              child: builders.errorBuilder?.call(context, loadingError!) ??
-                  Center(child: Text(loadingError.toString())),
+              child: builders.errorBuilder?.call(context, loadingError!) ?? Center(child: Text(loadingError.toString())),
             ),
           );
         case EpubViewLoadingState.success:
